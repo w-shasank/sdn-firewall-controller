@@ -18,9 +18,15 @@ class LearningSwitch(app_manager.OSKenApp):
 
         match = parser.OFPMatch()
         actions = [parser.OFPActionOutput(ofp.OFPP_CONTROLLER, ofp.OFPCML_NO_BUFFER)]
+        self.add_flow(dp, 0, match, actions)
+
+    def add_flow(self, dp, priority, match, actions, idle_timeout=0):
+        ofp = dp.ofproto
+        parser = dp.ofproto_parser
         inst = [parser.OFPInstructionActions(ofp.OFPIT_APPLY_ACTIONS, actions)]
-        dp.send_msg(parser.OFPFlowMod(datapath=dp, priority=0,
-                                      match=match, instructions=inst))
+        dp.send_msg(parser.OFPFlowMod(datapath=dp, priority=priority, match=match,
+                                      instructions=inst, idle_timeout=idle_timeout))
+                                      
 
     @set_ev_cls(ofp_event.EventOFPPacketIn, MAIN_DISPATCHER)
     def packet_in_handler(self, ev):
@@ -41,6 +47,10 @@ class LearningSwitch(app_manager.OSKenApp):
 
         out_port = table.get(eth.dst, ofp.OFPP_FLOOD)
         actions = [parser.OFPActionOutput(out_port)]
+        if out_port != ofp.OFPP_FLOOD:
+            match = parser.OFPMatch(in_port=in_port, eth_dst=eth.dst, eth_src=eth.src)
+            self.add_flow(dp, 1, match, actions, idle_timeout=30)
         out = parser.OFPPacketOut(datapath=dp, buffer_id=ofp.OFP_NO_BUFFER,
                                   in_port=in_port, actions=actions, data=msg.data)
         dp.send_msg(out)
+
